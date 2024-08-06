@@ -3,3 +3,6 @@ venv/
 
 #credentials file
 *.pkl
+
+# pychache
+__pycache__/
