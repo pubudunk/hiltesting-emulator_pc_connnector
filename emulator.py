@@ -3,7 +3,7 @@ import traceback
 
 
 #definitions
-UART_TIMEOUT = 60 
+UART_TIMEOUT = 15 
 
 
 #constants
@@ -21,6 +21,8 @@ TEST_ID_05 = 0x05
 RESULT_PASS = 0x01
 RESULT_FAIL = 0x02
 RESULT_NA   = 0x03
+
+HEADER_LEN = 2
 
 #global variables
 serialPort = None
@@ -133,29 +135,29 @@ def send_tests(test_cases):
     command_packet = build_command_packet(PACKET_TYPE_TESTS, test_cases)
 
     try:
-        # bytes_written = serialPort.write(command_packet)
 
-        header = bytes([0x02, 0x12]) #TODO mock code remove later
-        reply_data = bytearray([0x02, 0x05, 0x01, 0x01, 0x01, 0x02, 0x01, 0x02, 0x03, 0x01, 0x03, 0x04, 0x01, 0x02, 0x05, 0x01, 0x01]) #TODO mock code remove later
-        reply_data.append(calculate_crc(header+reply_data))
+        #header = bytes([0x02, 0x12]) #TODO mock code remove later
+        #reply_data = bytearray([0x02, 0x05, 0x01, 0x01, 0x01, 0x02, 0x01, 0x02, 0x03, 0x01, 0x03, 0x04, 0x01, 0x02, 0x05, 0x01, 0x01]) #TODO mock code remove later
+        #reply_data.append(calculate_crc(header+reply_data))
 
-        #if(bytes_written != len(command_packet)):
-        #    print("Error: Not all bytes were written to the serial port. command_packet_len: {len(command_packet)} bytes_written:{bytes_written}")
-        #     return None
+        bytes_written = serialPort.write(command_packet)
+        if(bytes_written != len(command_packet)):
+            print("Error: Not all bytes were written to the serial port. command_packet_len: {len(command_packet)} bytes_written:{bytes_written}")
+            return None
         
-        # # Wait for header (STX + Length + Packet Type)
-        # header = serialPort.read(2)
-        # if (len(header) < 3) or (header[0] != STX):
-        #     print('Error: Invalid or incomplete header received')
-        #     return None
+        # Wait for header (STX + Length + Packet Type)
+        header = serialPort.read(HEADER_LEN)
+        if (len(header) < HEADER_LEN) or (header[0] != STX):
+            print('Error: Invalid or incomplete header received')
+            return None
 
-        # length = header[1]
-        # # Read the remainder of the packet
-        # reply_data = serialPort.read(length)
+        length = header[1]
+        # Read the remainder of the packet
+        reply_data = serialPort.read(length)
 
-        # if (len(reply_data) < length):
-        #     print(f'Error: Incomplete packet received or timedout received_len: {len(reply_data)}')
-        #     return None
+        if (len(reply_data) < length):
+            print(f'Error: Incomplete packet received or timedout received_len: {len(reply_data)}')
+            return None
 
         packet_type = reply_data[0]
 
@@ -170,7 +172,7 @@ def send_tests(test_cases):
             print('Error: Reply packet CRC error')
             return None
         
-        print('mock reply packet:', ' '.join(f'{byte:02X}' for byte in bytes(header + reply_data)))
+        print('Reply packet:', ' '.join(f'{byte:02X}' for byte in bytes(header + reply_data)))
 
         return bytes(header + reply_data)
 

@@ -41,6 +41,8 @@ def assume_role_with_web_identity():
             if credentials['expiration'] > datetime.now(UTC):
                 return credentials
     
+    print(f'Getting new credentials')
+
     # Get existing Cognito Identity ID from file, if available
     identity_id = None
     if os.path.exists(credentials_file):
@@ -138,16 +140,17 @@ def main():
     # Initialize serial port
     ser = emulator.init_serial(sys.argv[1])
 
-    try:
-        credentials = assume_role_with_web_identity()
+    while True:
+        try:
+            # Refresh credentials if needed    
+            credentials = assume_role_with_web_identity()
 
-        dynamodb = get_boto3_client('dynamodb', credentials)
-        sqs = get_boto3_client('sqs', credentials)
-        lambda_client = get_boto3_client('lambda', credentials)
+            dynamodb = get_boto3_client('dynamodb', credentials)
+            sqs = get_boto3_client('sqs', credentials)
+            lambda_client = get_boto3_client('lambda', credentials)
 
-        print('Waiting for tests...')
+            print('Waiting for tests...')
 
-        while True:
             # Poll SQS for new messages
             response = sqs.receive_message(
                 QueueUrl=queue_url,
@@ -174,9 +177,7 @@ def main():
                 tests = json.loads(tests_json)
 
                 test_cases = [{'id': test['id'], 'len': test.get('len', ''), 'data': test.get('data', ''), 'name': test.get('name', '')} for test in tests]
-
-                print(f'Executing tests: {tests}')
-                #print(f'executing tests: {test_cases}')
+                print(f'Executing tests: {test_cases}')
                 
                 reply_packet = emulator.send_tests(test_cases)
                 results = emulator.process_reply_packet(reply_packet)
@@ -209,12 +210,20 @@ def main():
                     ReceiptHandle=message['ReceiptHandle']
                 )
 
-    except (NoCredentialsError, PartialCredentialsError) as e:
-        print(f"Error obtaining temporary credentials: {e}")
-        traceback.print_exc()
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        traceback.print_exc()
+        except (NoCredentialsError, PartialCredentialsError) as e:
+            print(f'Exception: Obtaining temporary credentials: {e}')
+            # Attempt to refresh credentials and retry
+            try:
+                credentials = assume_role_with_web_identity()
+                # Retry logic can be added here if needed
+            except (NoCredentialsError, PartialCredentialsError) as e:
+                print(f'Exception: Failed to refresh credentials: {e}')
+                traceback.print_exc()
+                break  # Exit if credentials cannot be refreshed
+        except Exception as e:
+            print(f'Exception: An unexpected error occurred: {e}')
+            traceback.print_exc()
+            break  # Exit on unexpected errors
 
 if __name__ == "__main__":
     main()
